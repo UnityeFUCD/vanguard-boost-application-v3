@@ -1,5 +1,3 @@
-// server.js
-
 // Express server setup
 const express = require('express');
 const axios = require('axios');
@@ -14,14 +12,13 @@ const table = base(process.env.AIRTABLE_TABLE_NAME);
 
 // Bungie API credentials
 const BUNGIE_CLIENT_ID = process.env.BUNGIE_CLIENT_ID;
-const BUNGIE_CLIENT_SECRET = process.env.BUNGIE_CLIENT_SECRET; // Make sure this is set in your .env or Heroku config
+const BUNGIE_CLIENT_SECRET = process.env.BUNGIE_CLIENT_SECRET;
 const BUNGIE_API_KEY = process.env.BUNGIE_API_KEY;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://vanguard-bungie-verify-c7de395776dd.herokuapp.com/callback';
 
 // Middleware to parse JSON
 app.use(express.json());
 
-// Handle callback from Bungie OAuth
 app.get('/callback', async (req, res) => {
   try {
     // Get the authorization code and state from the URL
@@ -37,11 +34,9 @@ app.get('/callback', async (req, res) => {
     
     // The state parameter now contains the nickname directly
     const userNickname = decodeURIComponent(state);
-    
     console.log('Received nickname from state parameter:', userNickname);
     
-    // Exchange authorization code for access token
-    // Include client_secret for confidential clients
+    // Exchange authorization code for access token (including client_secret)
     const tokenResponse = await axios.post(
       'https://www.bungie.net/platform/app/oauth/token/',
       `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&client_secret=${BUNGIE_CLIENT_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
@@ -52,9 +47,8 @@ app.get('/callback', async (req, res) => {
         }
       }
     );
-
-    const accessToken = tokenResponse.data.access_token;
     
+    const accessToken = tokenResponse.data.access_token;
     if (!accessToken) {
       throw new Error('Failed to get access token');
     }
@@ -64,24 +58,22 @@ app.get('/callback', async (req, res) => {
       'https://www.bungie.net/platform/User/GetCurrentBungieNetUser/',
       {
         headers: {
-          Authorization: `Bearer ${accessToken}`,
+          'Authorization': `Bearer ${accessToken}`,
           'X-API-Key': BUNGIE_API_KEY
         }
       }
     );
     
     const bungieUsername = userResponse.data.Response.displayName;
-    
     console.log('Bungie username:', bungieUsername);
     console.log('Application nickname:', userNickname);
-
-    // Directly compare Bungie username with the nickname from the application
+    
+    // Check if the Bungie username matches the nickname from the application
     if (bungieUsername.toLowerCase() === userNickname.toLowerCase()) {
       console.log('Username verified successfully!');
       
       // After successful verification, update the record in Airtable
       try {
-        // Find the record with the matching nickname in Airtable
         const records = await table.select({
           filterByFormula: `{nickname} = '${userNickname}'`
         }).firstPage();
@@ -89,17 +81,16 @@ app.get('/callback', async (req, res) => {
         if (records.length > 0) {
           // Update the record to mark it as verified
           await table.update(records[0].id, {
-            verified: true,
-            bungieUsername: bungieUsername
+            'verified': true,
+            'bungieUsername': bungieUsername
           });
           console.log('Airtable record updated successfully');
         } else {
           console.log('Could not find matching record in Airtable');
-          // Even if we can't find the record, the verification is still successful
+          // Verification is successful even if the record is not found
         }
       } catch (airtableError) {
         console.error('Error updating Airtable:', airtableError);
-        // We don't fail the verification if Airtable update fails
       }
       
       return res.send(`
@@ -197,9 +188,7 @@ app.get('/callback', async (req, res) => {
   } catch (error) {
     console.error('Error during verification:', error);
     
-    // Handle specific errors
     let errorMessage = 'An unexpected error occurred during verification.';
-    
     if (error.response) {
       if (error.response.status === 401) {
         errorMessage = 'Authentication failed. Please try again.';
@@ -230,25 +219,13 @@ app.get('/callback', async (req, res) => {
             h1 {
               color: #ff3e3e;
             }
-            .error-icon {
-              font-size: 60px;
-              color: #ff3e3e;
-              margin-bottom: 20px;
-            }
-            .details {
-              text-align: left;
-              background-color: rgba(255, 62, 62, 0.1);
-              padding: 15px;
-              border-radius: 5px;
-              margin: 20px 0;
-            }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="error-icon">✗</div>
             <h1>Verification Error</h1>
             <p>${errorMessage}</p>
+            <p>Please try again later.</p>
           </div>
         </body>
       </html>
@@ -256,7 +233,6 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
