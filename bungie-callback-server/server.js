@@ -55,9 +55,7 @@ app.get('/callback', async (req, res) => {
       }
     );
 
-    // ----------------------------
-    // ONLY CHANGE: Use bungieGlobalDisplayName
-    // ----------------------------
+    // Use bungieGlobalDisplayName and bungieGlobalDisplayNameCode
     const bungieUsername = userResponse.data.Response.bungieGlobalDisplayName;
     const bungieCode = userResponse.data.Response.bungieGlobalDisplayNameCode;
     // Combine them into a full unique name, e.g., "Unitye#1234"
@@ -69,7 +67,7 @@ app.get('/callback', async (req, res) => {
     console.log('Application nickname:', userNickname);
 
     // Compare the full Bungie name with the nickname from the application (case-insensitive)
-    if (fullBungieName.toLowerCase() === userNickname.toLowerCase()) {
+    if (fullBungieName && fullBungieName.toLowerCase() === userNickname.toLowerCase()) {
       console.log('Username verified successfully!');
 
       // After successful verification, update the Airtable record
