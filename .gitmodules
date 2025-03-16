@@ -1,4 +1,0 @@
-# Create a file named .gitmodules with the following content:
-[submodule "bungie-callback-server"]
-    path = bungie-callback-server
-    url = https://github.com/UnityeFUCD/bungie-callback-server.git
