@@ -93,29 +93,41 @@
       return urlParams.get(name);
     }
     
-    // When the page loads, update the verification link with the application ID if available
+    // When the page loads, update the verification link with the nickname and application ID
     window.onload = function() {
-      // Get application ID from URL if available
-      var appId = getUrlParam('applicationId');
+      // Get nickname from session storage
+      var nickname = sessionStorage.getItem("applicationNickname");
       
-      // If there's no application ID in the URL, generate one
+      // Get application ID from URL if available, otherwise from session storage
+      var appId = getUrlParam('applicationId') || sessionStorage.getItem("applicationId");
+      
+      // If there's no application ID, generate one
       if (!appId) {
         appId = 'APP' + Date.now();
+      }
+      
+      // Create a state parameter that contains the nickname (for verification)
+      // We'll use the nickname as the main state parameter since that's what we need for verification
+      var stateParam = nickname;
+      
+      // If we don't have a nickname from session storage, fall back to just using the app ID
+      if (!stateParam) {
+        stateParam = appId;
       }
       
       // Get the verification button
       var verifyButton = document.getElementById('verifyButton');
       
-      // Update the href to include the application ID as the state parameter
+      // Update the href to include the state parameter
       if (verifyButton) {
         var baseUrl = verifyButton.getAttribute('href');
         // Check if the URL already has a state parameter
         if (baseUrl.includes('state=')) {
           // Replace existing state parameter
-          verifyButton.href = baseUrl.replace(/state=[^&]*/, 'state=' + encodeURIComponent(appId));
+          verifyButton.href = baseUrl.replace(/state=[^&]*/, 'state=' + encodeURIComponent(stateParam));
         } else {
           // Add state parameter
-          verifyButton.href = baseUrl + '&state=' + encodeURIComponent(appId);
+          verifyButton.href = baseUrl + '&state=' + encodeURIComponent(stateParam);
         }
       }
     };
