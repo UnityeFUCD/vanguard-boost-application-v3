@@ -106,14 +106,18 @@
         appId = 'APP' + Date.now();
       }
       
-      // Create a state parameter that contains the nickname (for verification)
-      // We'll use the nickname as the main state parameter since that's what we need for verification
-      var stateParam = nickname;
-      
-      // If we don't have a nickname from session storage, fall back to just using the app ID
-      if (!stateParam) {
+      // Make sure we have a nickname, and properly encode it for the state parameter
+      // This is critical: we need to fully encode the nickname, especially any # characters
+      var stateParam = "";
+      if (nickname) {
+        // Properly encode the nickname - especially important for characters like #
+        stateParam = encodeURIComponent(nickname);
+      } else {
         stateParam = appId;
       }
+      
+      console.log("Using nickname for state: " + nickname);
+      console.log("Encoded state parameter: " + stateParam);
       
       // Get the verification button
       var verifyButton = document.getElementById('verifyButton');
@@ -124,11 +128,13 @@
         // Check if the URL already has a state parameter
         if (baseUrl.includes('state=')) {
           // Replace existing state parameter
-          verifyButton.href = baseUrl.replace(/state=[^&]*/, 'state=' + encodeURIComponent(stateParam));
+          verifyButton.href = baseUrl.replace(/state=[^&]*/, 'state=' + stateParam);
         } else {
           // Add state parameter
-          verifyButton.href = baseUrl + '&state=' + encodeURIComponent(stateParam);
+          verifyButton.href = baseUrl + '&state=' + stateParam;
         }
+        
+        console.log("Final verification URL: " + verifyButton.href);
       }
     };
   </script>
@@ -155,7 +161,7 @@
       <p>The Bungie account you use for verification must match EXACTLY what you entered in the "Nickname" field of your application.</p>
     </div>
 
-    <!-- Removed the scope parameter -->
+    <!-- URL without scope parameter -->
     <a
       id="verifyButton"
       class="button"
