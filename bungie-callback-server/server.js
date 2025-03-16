@@ -59,9 +59,10 @@ app.get('/callback', async (req, res) => {
     console.log('Received nickname from state parameter:', userNickname);
 
     // Exchange the authorization code for an access token, including the client secret
+    console.log('Exchanging code for token...');
     const tokenResponse = await axios.post(
       'https://www.bungie.net/platform/app/oauth/token/',
-      `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&client_secret=${BUNGIE_CLIENT_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
+      `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&client_secret=${BUNGIE_CLIENT_SECRET}`,
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -70,28 +71,70 @@ app.get('/callback', async (req, res) => {
       }
     );
     
+    console.log('Token response received');
     const accessToken = tokenResponse.data.access_token;
-    if (!accessToken) throw new Error('Failed to get access token');
+    const tokenType = tokenResponse.data.token_type;
+    
+    if (!accessToken) {
+      console.log('No access token in response:', tokenResponse.data);
+      throw new Error('Failed to get access token');
+    }
+    
+    console.log('Access token obtained, fetching user info...');
 
     // Retrieve Bungie user info using the access token
     const userResponse = await axios.get(
-      'https://www.bungie.net/platform/User/GetCurrentBungieNetUser/',
+      'https://www.bungie.net/platform/User/GetMembershipsForCurrentUser/',
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          'Authorization': `${tokenType} ${accessToken}`,
           'X-API-Key': BUNGIE_API_KEY
         }
       }
     );
 
-    // Use bungieGlobalDisplayName and bungieGlobalDisplayNameCode
-    const bungieUsername = userResponse.data.Response.bungieGlobalDisplayName;
-    const bungieCode = userResponse.data.Response.bungieGlobalDisplayNameCode;
+    console.log('User API response received');
+    console.log('Response status:', userResponse.status);
+    console.log('Response data structure:', JSON.stringify(Object.keys(userResponse.data)));
     
-    // Combine them into a full unique name, e.g., "Unitye#1234"
-    const fullBungieName = bungieUsername && typeof bungieCode !== 'undefined' 
-      ? `${bungieUsername}#${bungieCode}` 
-      : bungieUsername;
+    if (userResponse.data && userResponse.data.Response) {
+      console.log('Response content:', JSON.stringify(userResponse.data.Response, null, 2));
+    }
+
+    // Try to get the display name from the Bungie.net profile
+    let bungieUsername = null;
+    let bungieCode = null;
+    let fullBungieName = null;
+    
+    if (userResponse.data && 
+        userResponse.data.Response && 
+        userResponse.data.Response.bungieNetUser) {
+        
+      bungieUsername = userResponse.data.Response.bungieNetUser.displayName;
+      
+      // Try to get the unique code if it exists
+      if (userResponse.data.Response.bungieNetUser.uniqueName) {
+        const uniqueNameParts = userResponse.data.Response.bungieNetUser.uniqueName.split('#');
+        if (uniqueNameParts.length > 1) {
+          bungieCode = uniqueNameParts[1];
+        }
+      }
+      
+      // If we couldn't get the code from uniqueName, check for it directly
+      if (!bungieCode && 
+          userResponse.data.Response.bungieNetUser.cachedBungieGlobalDisplayNameCode !== undefined) {
+        bungieCode = userResponse.data.Response.bungieNetUser.cachedBungieGlobalDisplayNameCode;
+      }
+      
+      // Combine into full name
+      if (bungieUsername) {
+        if (bungieCode) {
+          fullBungieName = `${bungieUsername}#${bungieCode}`;
+        } else {
+          fullBungieName = bungieUsername;
+        }
+      }
+    }
 
     console.log('Bungie username:', bungieUsername);
     console.log('Bungie code:', bungieCode);
@@ -127,6 +170,8 @@ app.get('/callback', async (req, res) => {
     // Both must be strings to use toLowerCase()
     const bungieNameLower = String(fullBungieName).toLowerCase();
     const userNicknameLower = String(userNickname).toLowerCase();
+    
+    console.log(`Comparing "${bungieNameLower}" with "${userNicknameLower}"`);
     
     if (bungieNameLower === userNicknameLower) {
       console.log('Username verified successfully!');
@@ -206,12 +251,15 @@ app.get('/callback', async (req, res) => {
     }
   } catch (error) {
     console.error('Error during verification:', error);
-    let errorMessage = 'An unexpected error occurred during verification.';
     
+    // Log detailed error information
     if (error.response) {
-      console.log('Error response data:', error.response.data);
       console.log('Error response status:', error.response.status);
-      
+      console.log('Error response data:', JSON.stringify(error.response.data, null, 2));
+    }
+    
+    let errorMessage = 'An unexpected error occurred during verification.';
+    if (error.response) {
       if (error.response.status === 401) {
         errorMessage = 'Authentication failed. Please try again.';
       } else if (error.response.data && error.response.data.error_description) {
