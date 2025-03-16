@@ -1,3 +1,5 @@
+// server.js
+
 // Express server setup
 const express = require('express');
 const axios = require('axios');
@@ -12,6 +14,7 @@ const table = base(process.env.AIRTABLE_TABLE_NAME);
 
 // Bungie API credentials
 const BUNGIE_CLIENT_ID = process.env.BUNGIE_CLIENT_ID;
+const BUNGIE_CLIENT_SECRET = process.env.BUNGIE_CLIENT_SECRET; // Make sure this is set in your .env or Heroku config
 const BUNGIE_API_KEY = process.env.BUNGIE_API_KEY;
 const REDIRECT_URI = process.env.REDIRECT_URI || 'https://vanguard-bungie-verify-c7de395776dd.herokuapp.com/callback';
 
@@ -38,9 +41,10 @@ app.get('/callback', async (req, res) => {
     console.log('Received nickname from state parameter:', userNickname);
     
     // Exchange authorization code for access token
+    // Include client_secret for confidential clients
     const tokenResponse = await axios.post(
       'https://www.bungie.net/platform/app/oauth/token/',
-      `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
+      `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&client_secret=${BUNGIE_CLIENT_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
       {
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
@@ -60,7 +64,7 @@ app.get('/callback', async (req, res) => {
       'https://www.bungie.net/platform/User/GetCurrentBungieNetUser/',
       {
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
+          Authorization: `Bearer ${accessToken}`,
           'X-API-Key': BUNGIE_API_KEY
         }
       }
@@ -71,8 +75,7 @@ app.get('/callback', async (req, res) => {
     console.log('Bungie username:', bungieUsername);
     console.log('Application nickname:', userNickname);
 
-    // Check if the Bungie username matches the nickname from the application
-    // This is now a direct comparison without querying Airtable
+    // Directly compare Bungie username with the nickname from the application
     if (bungieUsername.toLowerCase() === userNickname.toLowerCase()) {
       console.log('Username verified successfully!');
       
@@ -86,14 +89,13 @@ app.get('/callback', async (req, res) => {
         if (records.length > 0) {
           // Update the record to mark it as verified
           await table.update(records[0].id, {
-            'verified': true,
-            'bungieUsername': bungieUsername
+            verified: true,
+            bungieUsername: bungieUsername
           });
           console.log('Airtable record updated successfully');
         } else {
           console.log('Could not find matching record in Airtable');
           // Even if we can't find the record, the verification is still successful
-          // because we directly compared the nickname from state param with Bungie username
         }
       } catch (airtableError) {
         console.error('Error updating Airtable:', airtableError);
@@ -233,21 +235,20 @@ app.get('/callback', async (req, res) => {
               color: #ff3e3e;
               margin-bottom: 20px;
             }
-            pre {
+            .details {
               text-align: left;
-              background-color: rgba(255, 255, 255, 0.1);
+              background-color: rgba(255, 62, 62, 0.1);
               padding: 15px;
               border-radius: 5px;
-              overflow-x: auto;
+              margin: 20px 0;
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="error-icon">⚠</div>
+            <div class="error-icon">✗</div>
             <h1>Verification Error</h1>
             <p>${errorMessage}</p>
-            <p>Please try again or contact support if the issue persists.</p>
           </div>
         </body>
       </html>
@@ -255,12 +256,7 @@ app.get('/callback', async (req, res) => {
   }
 });
 
-// Simple home page
-app.get('/', (req, res) => {
-  res.send('Bungie OAuth Verification Service');
-});
-
-// Start server
+// Start the server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
