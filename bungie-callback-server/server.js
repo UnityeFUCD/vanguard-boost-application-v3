@@ -55,8 +55,10 @@ app.get('/callback', async (req, res) => {
       }
     );
 
-    // Retrieve displayName and unique code from Bungie
-    const bungieUsername = userResponse.data.Response.displayName;
+    // ----------------------------
+    // ONLY CHANGE: Use bungieGlobalDisplayName
+    // ----------------------------
+    const bungieUsername = userResponse.data.Response.bungieGlobalDisplayName;
     const bungieCode = userResponse.data.Response.bungieGlobalDisplayNameCode;
     // Combine them into a full unique name, e.g., "Unitye#1234"
     const fullBungieName = bungieCode ? `${bungieUsername}#${bungieCode}` : bungieUsername;
@@ -79,8 +81,8 @@ app.get('/callback', async (req, res) => {
         if (records.length > 0) {
           // Update the record to mark it as verified and store the full Bungie username
           await table.update(records[0].id, {
-            'verified': true,
-            'bungieUsername': fullBungieName
+            verified: true,
+            bungieUsername: fullBungieName
           });
           console.log('Airtable record updated successfully');
         } else {
@@ -159,10 +161,13 @@ app.get('/callback', async (req, res) => {
             body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
             .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
             h1 { color: #ff3e3e; }
+            .error-icon { font-size: 60px; color: #ff3e3e; margin-bottom: 20px; }
+            .details { text-align: left; background-color: rgba(255,62,62,0.1); padding: 15px; border-radius: 5px; margin: 20px 0; }
           </style>
         </head>
         <body>
           <div class="container">
+            <div class="error-icon">✗</div>
             <h1>Verification Error</h1>
             <p>${errorMessage}</p>
             <p>Please try again later.</p>
