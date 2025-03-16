@@ -21,22 +21,16 @@ app.use(express.json());
 
 app.get('/callback', async (req, res) => {
   try {
-    // Get the authorization code and state from the URL
+    // Get the authorization code and state (which holds the application nickname) from the URL
     const { code, state } = req.query;
-    
-    if (!code) {
-      return res.status(400).send('Authorization code missing');
-    }
-    
-    if (!state) {
-      return res.status(400).send('State parameter missing');
-    }
-    
-    // The state parameter now contains the nickname directly
+    if (!code) return res.status(400).send('Authorization code missing');
+    if (!state) return res.status(400).send('State parameter missing');
+
+    // The state parameter contains the nickname provided by the applicant
     const userNickname = decodeURIComponent(state);
     console.log('Received nickname from state parameter:', userNickname);
-    
-    // Exchange authorization code for access token (including client_secret)
+
+    // Exchange the authorization code for an access token, including the client secret
     const tokenResponse = await axios.post(
       'https://www.bungie.net/platform/app/oauth/token/',
       `grant_type=authorization_code&code=${code}&client_id=${BUNGIE_CLIENT_ID}&client_secret=${BUNGIE_CLIENT_SECRET}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}`,
@@ -47,13 +41,10 @@ app.get('/callback', async (req, res) => {
         }
       }
     );
-    
     const accessToken = tokenResponse.data.access_token;
-    if (!accessToken) {
-      throw new Error('Failed to get access token');
-    }
-    
-    // Get Bungie user info with the access token
+    if (!accessToken) throw new Error('Failed to get access token');
+
+    // Retrieve Bungie user info using the access token
     const userResponse = await axios.get(
       'https://www.bungie.net/platform/User/GetCurrentBungieNetUser/',
       {
@@ -63,63 +54,52 @@ app.get('/callback', async (req, res) => {
         }
       }
     );
-    
+
+    // Retrieve displayName and unique code from Bungie
     const bungieUsername = userResponse.data.Response.displayName;
+    const bungieCode = userResponse.data.Response.bungieGlobalDisplayNameCode;
+    // Combine them into a full unique name, e.g., "Unitye#1234"
+    const fullBungieName = bungieCode ? `${bungieUsername}#${bungieCode}` : bungieUsername;
+
     console.log('Bungie username:', bungieUsername);
+    console.log('Bungie code:', bungieCode);
+    console.log('Full Bungie name:', fullBungieName);
     console.log('Application nickname:', userNickname);
-    
-    // Check if the Bungie username matches the nickname from the application
-    if (bungieUsername.toLowerCase() === userNickname.toLowerCase()) {
+
+    // Compare the full Bungie name with the nickname from the application (case-insensitive)
+    if (fullBungieName.toLowerCase() === userNickname.toLowerCase()) {
       console.log('Username verified successfully!');
-      
-      // After successful verification, update the record in Airtable
+
+      // After successful verification, update the Airtable record
       try {
         const records = await table.select({
           filterByFormula: `{nickname} = '${userNickname}'`
         }).firstPage();
-        
+
         if (records.length > 0) {
-          // Update the record to mark it as verified
+          // Update the record to mark it as verified and store the full Bungie username
           await table.update(records[0].id, {
             'verified': true,
-            'bungieUsername': bungieUsername
+            'bungieUsername': fullBungieName
           });
           console.log('Airtable record updated successfully');
         } else {
           console.log('Could not find matching record in Airtable');
-          // Verification is successful even if the record is not found
+          // Verification is considered successful even if the record isn't found
         }
       } catch (airtableError) {
         console.error('Error updating Airtable:', airtableError);
       }
-      
+
       return res.send(`
         <html>
           <head>
             <title>Verification Successful</title>
             <style>
-              body {
-                font-family: Arial, sans-serif;
-                background-color: #101114;
-                color: #ffffff;
-                text-align: center;
-                padding: 50px 20px;
-              }
-              .container {
-                max-width: 600px;
-                margin: 0 auto;
-                background-color: rgba(0, 0, 0, 0.5);
-                padding: 30px;
-                border-radius: 8px;
-              }
-              h1 {
-                color: #c4ff00;
-              }
-              .success-icon {
-                font-size: 60px;
-                color: #c4ff00;
-                margin-bottom: 20px;
-              }
+              body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
+              .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
+              h1 { color: #c4ff00; }
+              .success-icon { font-size: 60px; color: #c4ff00; margin-bottom: 20px; }
             </style>
           </head>
           <body>
@@ -139,35 +119,11 @@ app.get('/callback', async (req, res) => {
           <head>
             <title>Verification Failed</title>
             <style>
-              body {
-                font-family: Arial, sans-serif;
-                background-color: #101114;
-                color: #ffffff;
-                text-align: center;
-                padding: 50px 20px;
-              }
-              .container {
-                max-width: 600px;
-                margin: 0 auto;
-                background-color: rgba(0, 0, 0, 0.5);
-                padding: 30px;
-                border-radius: 8px;
-              }
-              h1 {
-                color: #ff3e3e;
-              }
-              .error-icon {
-                font-size: 60px;
-                color: #ff3e3e;
-                margin-bottom: 20px;
-              }
-              .details {
-                text-align: left;
-                background-color: rgba(255, 62, 62, 0.1);
-                padding: 15px;
-                border-radius: 5px;
-                margin: 20px 0;
-              }
+              body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
+              .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
+              h1 { color: #ff3e3e; }
+              .error-icon { font-size: 60px; color: #ff3e3e; margin-bottom: 20px; }
+              .details { text-align: left; background-color: rgba(255,62,62,0.1); padding: 15px; border-radius: 5px; margin: 20px 0; }
             </style>
           </head>
           <body>
@@ -176,7 +132,7 @@ app.get('/callback', async (req, res) => {
               <h1>Verification Failed</h1>
               <p>The Bungie username does not match the nickname you provided in your application.</p>
               <div class="details">
-                <p><strong>Bungie Username:</strong> ${bungieUsername}</p>
+                <p><strong>Bungie Username:</strong> ${fullBungieName}</p>
                 <p><strong>Application Nickname:</strong> ${userNickname}</p>
               </div>
               <p>Please make sure you're logged in with the correct Bungie account and try again.</p>
@@ -187,7 +143,6 @@ app.get('/callback', async (req, res) => {
     }
   } catch (error) {
     console.error('Error during verification:', error);
-    
     let errorMessage = 'An unexpected error occurred during verification.';
     if (error.response) {
       if (error.response.status === 401) {
@@ -196,29 +151,14 @@ app.get('/callback', async (req, res) => {
         errorMessage = error.response.data.error_description;
       }
     }
-    
     return res.status(500).send(`
       <html>
         <head>
           <title>Verification Error</title>
           <style>
-            body {
-              font-family: Arial, sans-serif;
-              background-color: #101114;
-              color: #ffffff;
-              text-align: center;
-              padding: 50px 20px;
-            }
-            .container {
-              max-width: 600px;
-              margin: 0 auto;
-              background-color: rgba(0, 0, 0, 0.5);
-              padding: 30px;
-              border-radius: 8px;
-            }
-            h1 {
-              color: #ff3e3e;
-            }
+            body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
+            .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
+            h1 { color: #ff3e3e; }
           </style>
         </head>
         <body>
