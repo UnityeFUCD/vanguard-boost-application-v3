@@ -3,7 +3,7 @@ const express = require('express');
 const axios = require('axios');
 require('dotenv').config();
 const app = express();
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3195;
 
 // Airtable setup
 const Airtable = require('airtable');
@@ -22,7 +22,35 @@ app.use(express.json());
 app.get('/callback', async (req, res) => {
   try {
     // Get the authorization code and state (which holds the application nickname) from the URL
-    const { code, state } = req.query;
+    const { code, state, error, error_description } = req.query;
+    
+    // Handle error cases from Bungie OAuth
+    if (error) {
+      console.log(`OAuth error: ${error} - ${error_description}`);
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Error</title>
+            <style>
+              body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
+              .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
+              h1 { color: #ff3e3e; }
+              .error-icon { font-size: 60px; color: #ff3e3e; margin-bottom: 20px; }
+              .details { text-align: left; background-color: rgba(255,62,62,0.1); padding: 15px; border-radius: 5px; margin: 20px 0; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">✗</div>
+              <h1>Verification Error</h1>
+              <p>${error_description || error}</p>
+              <p>Please try again with the correct parameters.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+    
     if (!code) return res.status(400).send('Authorization code missing');
     if (!state) return res.status(400).send('State parameter missing');
 
@@ -41,6 +69,7 @@ app.get('/callback', async (req, res) => {
         }
       }
     );
+    
     const accessToken = tokenResponse.data.access_token;
     if (!accessToken) throw new Error('Failed to get access token');
 
@@ -58,16 +87,48 @@ app.get('/callback', async (req, res) => {
     // Use bungieGlobalDisplayName and bungieGlobalDisplayNameCode
     const bungieUsername = userResponse.data.Response.bungieGlobalDisplayName;
     const bungieCode = userResponse.data.Response.bungieGlobalDisplayNameCode;
+    
     // Combine them into a full unique name, e.g., "Unitye#1234"
-    const fullBungieName = bungieCode ? `${bungieUsername}#${bungieCode}` : bungieUsername;
+    const fullBungieName = bungieUsername && typeof bungieCode !== 'undefined' 
+      ? `${bungieUsername}#${bungieCode}` 
+      : bungieUsername;
 
     console.log('Bungie username:', bungieUsername);
     console.log('Bungie code:', bungieCode);
     console.log('Full Bungie name:', fullBungieName);
     console.log('Application nickname:', userNickname);
 
+    // Check if we have a valid Bungie name to compare
+    if (!fullBungieName) {
+      console.log('Error: Could not retrieve Bungie username');
+      return res.status(400).send(`
+        <html>
+          <head>
+            <title>Verification Failed</title>
+            <style>
+              body { font-family: Arial, sans-serif; background-color: #101114; color: #ffffff; text-align: center; padding: 50px 20px; }
+              .container { max-width: 600px; margin: 0 auto; background-color: rgba(0,0,0,0.5); padding: 30px; border-radius: 8px; }
+              h1 { color: #ff3e3e; }
+              .error-icon { font-size: 60px; color: #ff3e3e; margin-bottom: 20px; }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="error-icon">✗</div>
+              <h1>Verification Failed</h1>
+              <p>We couldn't retrieve your Bungie username. Please make sure you're logged into Bungie.net and try again.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
     // Compare the full Bungie name with the nickname from the application (case-insensitive)
-    if (fullBungieName && fullBungieName.toLowerCase() === userNickname.toLowerCase()) {
+    // Both must be strings to use toLowerCase()
+    const bungieNameLower = String(fullBungieName).toLowerCase();
+    const userNicknameLower = String(userNickname).toLowerCase();
+    
+    if (bungieNameLower === userNicknameLower) {
       console.log('Username verified successfully!');
 
       // After successful verification, update the Airtable record
@@ -114,6 +175,8 @@ app.get('/callback', async (req, res) => {
       `);
     } else {
       console.log('Verification failed: username mismatch');
+      console.log(`Comparing "${bungieNameLower}" with "${userNicknameLower}"`);
+      
       return res.status(400).send(`
         <html>
           <head>
@@ -144,13 +207,18 @@ app.get('/callback', async (req, res) => {
   } catch (error) {
     console.error('Error during verification:', error);
     let errorMessage = 'An unexpected error occurred during verification.';
+    
     if (error.response) {
+      console.log('Error response data:', error.response.data);
+      console.log('Error response status:', error.response.status);
+      
       if (error.response.status === 401) {
         errorMessage = 'Authentication failed. Please try again.';
       } else if (error.response.data && error.response.data.error_description) {
         errorMessage = error.response.data.error_description;
       }
     }
+    
     return res.status(500).send(`
       <html>
         <head>
