@@ -86,6 +86,40 @@
       margin: 20px 0;
     }
   </style>
+  <script>
+    // Function to get URL parameters
+    function getUrlParam(name) {
+      var urlParams = new URLSearchParams(window.location.search);
+      return urlParams.get(name);
+    }
+    
+    // When the page loads, update the verification link with the application ID if available
+    window.onload = function() {
+      // Get application ID from URL if available
+      var appId = getUrlParam('applicationId');
+      
+      // If there's no application ID in the URL, generate one
+      if (!appId) {
+        appId = 'APP' + Date.now();
+      }
+      
+      // Get the verification button
+      var verifyButton = document.getElementById('verifyButton');
+      
+      // Update the href to include the application ID as the state parameter
+      if (verifyButton) {
+        var baseUrl = verifyButton.getAttribute('href');
+        // Check if the URL already has a state parameter
+        if (baseUrl.includes('state=')) {
+          // Replace existing state parameter
+          verifyButton.href = baseUrl.replace(/state=[^&]*/, 'state=' + encodeURIComponent(appId));
+        } else {
+          // Add state parameter
+          verifyButton.href = baseUrl + '&state=' + encodeURIComponent(appId);
+        }
+      }
+    };
+  </script>
 </head>
 <body>
   <div class="container">
@@ -106,9 +140,10 @@
 
     <div class="important">
       <p><strong>IMPORTANT:</strong> You must complete the Bungie identity verification to proceed with your application.</p>
+      <p>The Bungie account you use for verification must match EXACTLY what you entered in the "Nickname" field of your application.</p>
     </div>
 
-    <a class="button" href="https://www.bungie.net/en/OAuth/Authorize?client_id=49253&response_type=code&redirect_uri=https%3A%2F%2Fvanguard-bungie-verify-c7de395776dd.herokuapp.com%2Fcallback">Complete Verification Now</a>
+    <a id="verifyButton" class="button" href="https://www.bungie.net/en/OAuth/Authorize?client_id=49253&response_type=code&redirect_uri=https%3A%2F%2Fvanguard-bungie-verify-c7de395776dd.herokuapp.com%2Fcallback">Complete Verification Now</a>
     
     <p style="margin-top: 30px; font-size: 0.9rem; color: #888;">
       If you have any questions, please contact us on Discord.

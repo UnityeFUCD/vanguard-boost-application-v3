@@ -642,7 +642,6 @@
         <!-- VPN & Streaming Section -->
         <div class="section">
           <h2 class="section-title">VPN & Streaming</h2>
-          <!-- ADDED: VPN Acknowledgement Checkbox with a value -->
           <div class="form-group">
             <label class="form-label required">VPN Requirement</label>
             <div class="checkbox-group">
@@ -662,7 +661,6 @@
               </label>
             </div>
           </div>
-          <!-- Streaming Options -->
           <div class="form-group">
             <label class="form-label required">Are you able to stream your services?</label>
             <div class="radio-group">
@@ -830,8 +828,14 @@
   <script>
     document.addEventListener("DOMContentLoaded", function () {
       console.log("DOM loaded - initializing form");
-      // Set a unique Application ID (e.g., APP + timestamp)
-      document.getElementById("applicationId").value = "APP" + Date.now();
+      
+      // Generate a unique Application ID
+      const applicationId = "APP" + Date.now();
+      document.getElementById("applicationId").value = applicationId;
+      
+      const applicationForm = document.getElementById("applicationForm");
+      
+      // Page elements and navigation
       const page1 = document.getElementById("page1");
       const page2 = document.getElementById("page2");
       const step1 = document.getElementById("step1");
@@ -840,10 +844,12 @@
       const nextButton = document.getElementById("nextButton");
       const backButton = document.getElementById("backButton");
       const submitButton = document.getElementById("submitButton");
+      
       // Initialize submit button as disabled
       if (submitButton) {
         submitButton.disabled = true;
       }
+      
       // Hide any debug output outside container
       const debugElements = document.querySelectorAll("body > *:not(.container)");
       debugElements.forEach(function (element) {
@@ -852,6 +858,7 @@
         }
       });
       document.querySelector(".container").style.display = "block";
+      
       // "JOIN NOW" button & Discord checkbox logic
       const joinedDiscordCheckbox = document.getElementById("joinedDiscord");
       const joinNowButton = document.getElementById("joinNowButton");
@@ -861,6 +868,7 @@
           joinedDiscordCheckbox.disabled = false;
         });
       }
+      
       // Game selection dropdown
       const gameSelect = document.getElementById("game");
       const otherGameInput = document.getElementById("otherGameInput");
@@ -869,6 +877,7 @@
           otherGameInput.style.display = (this.value === "Other") ? "block" : "none";
         });
       }
+      
       // Availability radio buttons
       const availabilityRadios = document.querySelectorAll('input[name="availability"]');
       const otherAvailabilityInput = document.getElementById("otherAvailabilityInput");
@@ -877,6 +886,7 @@
           otherAvailabilityInput.style.display = (this.value === "Other") ? "block" : "none";
         });
       });
+      
       // File upload functionality
       const fileInput = document.getElementById("fileInput");
       const fileList = document.getElementById("fileList");
@@ -929,6 +939,7 @@
           updateFileListUI();
         }
       }
+      
       // Page navigation
       if (nextButton) {
         nextButton.addEventListener("click", function () {
@@ -957,6 +968,7 @@
           window.scrollTo(0, 0);
         });
       }
+      
       function checkPage2Fields() {
         const requiredInputs = page2.querySelectorAll("input[required], select[required], textarea[required]");
         let allValid = true;
@@ -989,11 +1001,6 @@
         });
         updateSubmitButtonState();
       }
-      if (nextButton) {
-        nextButton.addEventListener("click", function () {
-          if (validatePage(page1)) { setupPage2Validation(); }
-        });
-      }
       function setupErrorClearingBehavior() {
         const allFormElements = document.querySelectorAll("input, select, textarea");
         allFormElements.forEach(function (element) {
@@ -1013,10 +1020,28 @@
       const debugBlocker = document.createElement("div");
       debugBlocker.id = "debugTextRemover";
       document.body.appendChild(debugBlocker);
-      // SUBMIT HANDLER with captcha check
-      const applicationForm = document.getElementById("applicationForm");
+      
+      // Combined submit handler: update IDs, validate page 2, check captcha, and submit
       if (applicationForm) {
         applicationForm.addEventListener("submit", function (e) {
+          // Update the applicationId field and redirect URL with the unique ID
+          document.getElementById("applicationId").value = applicationId;
+          const redirectField = document.querySelector('input[name="redirect"]');
+          if (redirectField) {
+            const redirectUrl = redirectField.value;
+            if (redirectUrl.includes('?')) {
+              redirectField.value = redirectUrl + '&applicationId=' + applicationId;
+            } else {
+              redirectField.value = redirectUrl + '?applicationId=' + applicationId;
+            }
+          }
+          // Store nickname in sessionStorage for later verification
+          const nickname = document.getElementById("nickname").value;
+          if (nickname) {
+            sessionStorage.setItem("applicationNickname", nickname);
+            sessionStorage.setItem("applicationId", applicationId);
+          }
+          
           e.preventDefault();
           if (!validatePage(page2)) {
             alert("Please fill in all required fields before submitting.");
@@ -1032,9 +1057,10 @@
             return;
           }
           alert("Application submitted successfully!");
-          applicationForm.submit(); // triggers Netlify redirect to thank-you.html
+          applicationForm.submit();
         });
       }
+      
       function validatePage(page) {
         let isValid = true;
         const requiredElements = page.querySelectorAll("input[required], select[required], textarea[required]");
